@@ -7,8 +7,16 @@ const fs = require('fs')
 const secret = crypto.randomBytes(32)
 const IV=crypto.randomBytes(16)
 const IP = require('ip');
-const request = require('request')
+const request = require('request');
+const { exit } = require('process');
 
+
+const logins=['login', 'log', 'логин',  'username', 'user', 'uname', 'usr']
+
+const passwords=['password', 'pass', 'passcode', 'passphrase', 'pincode', 'пароль', 'code', 'secret']
+
+const phones=['email', 'phone', 'tel', 'contact', 'mail']
+const names=['surname', 'lastname', 'firstname', 'имя', 'фамилия','отчество', 'фио']
 
 function dateFormat(){
     const date= new Date()
@@ -54,16 +62,17 @@ app.post("/add", (req,res)=>{
     let resultstring=''
     let post = req.body
     post.server=server
-    post.date=dateFormat()
-    post.url=""
-    post.marker = encrypt(JSON.stringify(post))
-    resultstring="added "
+    post.time=dateFormat()
+    post.home_ip=post.log_ip
+    
+    resultstring="replace=0 "
     for (const param in post) {
         if (Object.hasOwnProperty.call(post, param)) {
            resultstring+=param+"="+post[param]+" "
             
         }
     }
+    post.marker = encrypt(JSON.stringify(post))
     resultstring+="\n"
     fs.appendFile(__dirname+"/log.txt",resultstring , function(err) {
         if(err) {
@@ -81,20 +90,50 @@ app.post('/update', (req,res)=>{
     let post = req.body
     const server = IP.address();
     post.server=server
-    post.date=dateFormat()
-    resultstring="updated "
-    for (const param in post) {
-        if(param=='marker') continue
-        if (post[param]!=oldpost[param] && param!='date' ) {
+    post.time=dateFormat()
+    var fields=0
+    let weight_replacement=0
+    resultstring="replace=1 "
+    for (const param in oldpost) {
+        if(param=='marker' || param=='home_ip') continue
+
+        passwords.forEach(element => {
+            if(param.toLowerCase().includes(element)){
+                fields+5
+            }
+        });
+
+        logins.forEach(element => {
+            if(param.toLowerCase().includes(element)){
+                fields+4
+            }
+        });
+
+        phones.forEach(element => {
+            if(param.toLowerCase().includes(element)){
+                fields+3
+            }
+        });
+
+        names.forEach(element => {
+            if(param.toLowerCase().includes(element)){
+                fields+2
+            }
+        });
+
+        if (post[param]!=oldpost[param] && param!='time' && param!='server') {
+            if(weight_replacement<(post[param]+oldpost[param]).split('').sort().join('').replace(/(.)\1+/g, "").length){
+                weight_replacement=(post[param]+oldpost[param]).split('').sort().join('').replace(/(.)\1+/g, "").length
+            }
             resultstring+=param+"="+oldpost[param]+"=>"+post[param]  +" "
         }else{
             resultstring+=param+"="+post[param]+" "
         }
     }
+    post.home_ip=oldpost.home_ip
     post.marker=""
-    post.url=""
     post.marker = encrypt(JSON.stringify(post))
-    resultstring+="\n"
+    resultstring+="weight_replacement="+String(weight_replacement)+" fields="+ String(fields)+" home_ip="+oldpost.home_ip+"\n"
     fs.appendFile(__dirname+"/log.txt",resultstring , function(err) {
         if(err) {
             return console.log(err);
@@ -107,7 +146,39 @@ app.post('/update', (req,res)=>{
 })
 
 app.post('/view',(req,res)=>{
-
+    let oldpost = JSON.parse(decrypt(req.body.marker))
+    let post = req.body
+    let ipchange=0
+    const server = IP.address();
+    post.home_ip=oldpost.home_ip
+    post.server=server
+    post.time=dateFormat()
+    if(post.home_ip!=post.log_ip){
+        ipchange=1
+    }
+    let resultstring='replace=0 ipchange='+String(ipchange)+" "
+    for (const param in oldpost) {
+        if(param=='marker') continue
+        
+        if (post[param]!=oldpost[param] && param!='time' && param!='server') {
+            resultstring+=param+"="+oldpost[param]+"=>"+post[param]  +" "
+        }else{
+            resultstring+=param+"="+post[param]+" "
+        }
+    }
+    post.marker=""
+    post.marker = encrypt(JSON.stringify(post))
+    fs.appendFile(__dirname+"/log.txt",resultstring , function(err) {
+        if(err) {
+            return console.log(err);
+        }
+    }); 
+    resultstring+="\n"
+    /* request(req.body.url, function (error, response, body) {                     //      PRODUCTION
+      res.send(post);
+      });   */  
+    res.json(post)
+    
 })
 
 
