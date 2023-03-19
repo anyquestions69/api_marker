@@ -4,12 +4,11 @@ const crypto = require("crypto");
 const PORT = process.env.PORT || 80
 const bodyParser = require('body-parser');
 const fs = require('fs')
-const secret = crypto.randomBytes(32)
+const secret = 'egor loskutov daun' //crypto.randomBytes(32)
 const IV=crypto.randomBytes(16)
 const IP = require('ip');
 const request = require('request');
-const { exit } = require('process');
-
+const CryptoJS = require("crypto-js");
 
 const logins=['login', 'log', 'логин',  'username', 'user', 'uname', 'usr']
 
@@ -33,112 +32,137 @@ function dateFormat(){
       return `${hour}:${minutes}:${seconds}-${day}.${month}.${year}`
 }
 
-function encrypt(text) {
+
+const  encrypt = (data)=>{ return CryptoJS.AES.encrypt(JSON.stringify(data), secret).toString()}
+const  decrypt = (data)=>{var bytes = CryptoJS.AES.decrypt(data, secret); return JSON.parse(bytes.toString(CryptoJS.enc.Utf8))}
+/* function encrypt(text) {
     const encryptalgo = crypto.createCipheriv('aes-256-cbc', secret,IV);
-    let encrypted = encryptalgo.update(text, 'utf8', 'hex');
+    let encrypted = encryptalgo.update(text, 'utf-8', 'hex');
     encrypted += encryptalgo.final('hex');
     return encrypted;
 }
 
 function decrypt(encrypted) {
     const decryptalgo = crypto.createDecipheriv('aes-256-cbc', secret, IV);
-    let decrypted = decryptalgo.update(encrypted, 'hex', 'utf8');
-    decrypted += decryptalgo.final('utf8');
+    let decrypted = decryptalgo.update(encrypted, 'hex', 'utf-8');
+    decrypted += decryptalgo.final('utf-8');
     return decrypted;
-}
+} */
 
 
 app.use(bodyParser.json())
     .use(bodyParser.urlencoded({extended: true}))
 
 
-app.get('/getIP', (req, res) => {
-    const ipAddress = IP.address();
-    res.send(ipAddress)
+app.post('/enc', (req,res)=>{
+    console.log(req.body)
+    res.send(encrypt(JSON.stringify(req.body)))
 })
+app.post('/decr',(req,res)=>{
+    res.send(decrypt(req.body.marker))
+})
+
 
 app.post("/add", (req,res)=>{
     const server = IP.address();
-    let resultstring=''
     let post = req.body
     post.server=server
     post.time=dateFormat()
     post.home_ip=post.log_ip
+
+    let resultJson = {
+        replace: 0,
+        home_ip:post.home_ip,
+        time:post.time,
+        server:server,
+        data:{}
+    }
     
-    resultstring="replace=0 "
     for (const param in post) {
-        if (Object.hasOwnProperty.call(post, param)) {
-           resultstring+=param+"="+post[param]+" "
-            
+        if (param!='time' && param!='server'&& param!='home_ip'&& param!='log_ip'&& param!='marker'&& param!='marker'){
+            resultJson.data[param]=post[param]
         }
     }
     post.marker = encrypt(JSON.stringify(post))
-    resultstring+="\n"
-    fs.appendFile(__dirname+"/log.txt",resultstring , function(err) {
-        if(err) {
-            return console.log(err);
-        }
-    }); 
+    fs.readFile('log.json', function (err, data) {
+        var json = JSON.parse(data)
+        json.push(resultJson)
+        fs.writeFile("log.json", JSON.stringify(json), function(err){
+            if (err) throw err;
+        })
+    })
     /* request(req.body.url, function (error, response, body) {                     //      PRODUCTION
       res.send(post);
       });   */  
-    res.json({data:post})
+    res.json({data:post.marker})
 });
 
 app.post('/update', (req,res)=>{
-    let oldpost = JSON.parse(decrypt(req.body.marker))
+    let decr = decrypt(req.body.marker)
+    let oldpost = JSON.parse(decr)
     let post = req.body
     const server = IP.address();
     post.server=server
     post.time=dateFormat()
-    var fields=0
-    let weight_replacement=0
-    resultstring="replace=1 "
+    let resultJson = {
+        replace: 1,
+        home_ip:oldpost.home_ip,
+        time:post.time,
+        server:server,
+        data:{},
+        newdata:{},
+        fields:0,
+        weight_replacement:0
+    }
     for (const param in oldpost) {
-        if(param=='marker' || param=='home_ip') continue
-
-        passwords.forEach(element => {
-            if(param.toLowerCase().includes(element)){
-                fields+5
+        if(param=='time' && param=='server'&& param=='home_ip'&& param=='log_ip'&& param=='marker'&& param=='marker') continue
+        if (post[param]!=oldpost[param]) {
+            for(let i=0; i<passwords.length;i++){
+                if(param.toLowerCase().includes(passwords[i])){
+                    resultJson.fields+=5
+                    break
+                }
             }
-        });
-
-        logins.forEach(element => {
-            if(param.toLowerCase().includes(element)){
-                fields+4
+            for(let i=0; i<phones.length;i++){if(param.toLowerCase().includes(phones[i])){
+                resultJson.fields+=4
+                    break}}
+    
+            for(let i=0; i<logins.length;i++){
+                if(param.toLowerCase().includes(logins[i])){
+                    resultJson.fields+=3
+                    break
+                }
             }
-        });
-
-        phones.forEach(element => {
-            if(param.toLowerCase().includes(element)){
-                fields+3
+    
+            for(let i=0; i<names.length;i++){
+                if(param.toLowerCase().includes(names[i])){
+                    resultJson.fields+=2
+                    break
+                }
             }
-        });
 
-        names.forEach(element => {
-            if(param.toLowerCase().includes(element)){
-                fields+2
+            if(resultJson.weight_replacement<(post[param]+oldpost[param]).split('').sort().join('').replace(/(.)\1+/g, "").length){
+                resultJson.weight_replacement=(post[param]+oldpost[param]).split('').sort().join('').replace(/(.)\1+/g, "").length
             }
-        });
-
-        if (post[param]!=oldpost[param] && param!='time' && param!='server') {
-            if(weight_replacement<(post[param]+oldpost[param]).split('').sort().join('').replace(/(.)\1+/g, "").length){
-                weight_replacement=(post[param]+oldpost[param]).split('').sort().join('').replace(/(.)\1+/g, "").length
-            }
-            resultstring+=param+"="+oldpost[param]+"=>"+post[param]  +" "
+            resultJson.data[param]=oldpost[param]
+            resultJson.newdata[param]=post[param]
         }else{
-            resultstring+=param+"="+post[param]+" "
+            resultJson.data[param]=oldpost[param]
         }
     }
     post.home_ip=oldpost.home_ip
+
     post.marker=""
     post.marker = encrypt(JSON.stringify(post))
-    resultstring+="weight_replacement="+String(weight_replacement)+" fields="+ String(fields)+" home_ip="+oldpost.home_ip+"\n"
-    fs.appendFile(__dirname+"/log.txt",resultstring , function(err) {
-        if(err) {
-            return console.log(err);
-        }
-    }); 
+    fs.readFile('log.json', function (err, data) {
+        var json = JSON.parse(data)
+        console.log(json)
+        json.push(resultJson)
+        console.log(json)
+        fs.writeFile("log.json", JSON.stringify(json), function(err){
+            if (err) throw err;
+        })
+    })
     /* request(req.body.url, function (error, response, body) {                     //      PRODUCTION
       res.send(post);
       });   */  
@@ -146,6 +170,7 @@ app.post('/update', (req,res)=>{
 })
 
 app.post('/view',(req,res)=>{
+    decrypt(req.body.marker)
     let oldpost = JSON.parse(decrypt(req.body.marker))
     let post = req.body
     let ipchange=0
@@ -156,24 +181,33 @@ app.post('/view',(req,res)=>{
     if(post.home_ip!=post.log_ip){
         ipchange=1
     }
-    let resultstring='replace=0 ipchange='+String(ipchange)+" "
-    for (const param in oldpost) {
-        if(param=='marker') continue
-        
-        if (post[param]!=oldpost[param] && param!='time' && param!='server') {
-            resultstring+=param+"="+oldpost[param]+"=>"+post[param]  +" "
-        }else{
-            resultstring+=param+"="+post[param]+" "
+    let resultJson = {
+        replace: 0,
+        home_ip:post.home_ip,
+        log_ip:post.log_ip,
+        ipchange:ipchange,
+        time:post.time,
+        server:server,
+        data:{}
+    }
+   
+    for (const param in post) {
+        if (param!='time' && param!='server'&& param!='home_ip'&& param!='log_ip'&& param!='marker'&& param!='marker') {
+            resultJson.data[param]=post[param]
         }
     }
     post.marker=""
     post.marker = encrypt(JSON.stringify(post))
-    fs.appendFile(__dirname+"/log.txt",resultstring , function(err) {
-        if(err) {
-            return console.log(err);
-        }
-    }); 
-    resultstring+="\n"
+
+    fs.readFile('log.json', function (err, data) {
+        var json = JSON.parse(data)
+        console.log(json)
+        json.push(resultJson)
+        console.log(json)
+        fs.writeFile("log.json", JSON.stringify(json), function(err){
+            if (err) throw err;
+        })
+    })
     /* request(req.body.url, function (error, response, body) {                     //      PRODUCTION
       res.send(post);
       });   */  
