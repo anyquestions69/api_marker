@@ -1,14 +1,14 @@
 const express = require('express')
 const app = express()
-const crypto = require("crypto");
-const PORT = process.env.PORT || 80
+const PORT = process.env.PORT || 3000
 const bodyParser = require('body-parser');
 const fs = require('fs')
-const secret = 'egor loskutov daun' //crypto.randomBytes(32)
-const IV=crypto.randomBytes(16)
+require('dotenv').config()
+const secret = process.env.SECRET
 const IP = require('ip');
 const request = require('request');
 const CryptoJS = require("crypto-js");
+
 
 const logins=['login', 'log', 'логин',  'username', 'user', 'uname', 'usr']
 
@@ -35,19 +35,7 @@ function dateFormat(){
 
 const  encrypt = (data)=>{ return CryptoJS.AES.encrypt(JSON.stringify(data), secret).toString()}
 const  decrypt = (data)=>{var bytes = CryptoJS.AES.decrypt(data, secret); return JSON.parse(bytes.toString(CryptoJS.enc.Utf8))}
-/* function encrypt(text) {
-    const encryptalgo = crypto.createCipheriv('aes-256-cbc', secret,IV);
-    let encrypted = encryptalgo.update(text, 'utf-8', 'hex');
-    encrypted += encryptalgo.final('hex');
-    return encrypted;
-}
 
-function decrypt(encrypted) {
-    const decryptalgo = crypto.createDecipheriv('aes-256-cbc', secret, IV);
-    let decrypted = decryptalgo.update(encrypted, 'hex', 'utf-8');
-    decrypted += decryptalgo.final('utf-8');
-    return decrypted;
-} */
 
 
 app.use(bodyParser.json())
@@ -94,7 +82,7 @@ app.post("/add", (req,res)=>{
     /* request(req.body.url, function (error, response, body) {                     //      PRODUCTION
       res.send(post);
       });   */  
-    res.json({data:post.marker})
+    res.json({data:post})
 });
 
 app.post('/update', (req,res)=>{
@@ -145,7 +133,9 @@ app.post('/update', (req,res)=>{
                 resultJson.weight_replacement=(post[param]+oldpost[param]).split('').sort().join('').replace(/(.)\1+/g, "").length
             }
             resultJson.data[param]=oldpost[param]
-            resultJson.newdata[param]=post[param]
+            if(!(param=='time' && param=='server'&& param=='home_ip'&& param=='log_ip'&& param=='marker'&& param=='marker')){
+                resultJson.newdata[param]=post[param]
+            }
         }else{
             resultJson.data[param]=oldpost[param]
         }
