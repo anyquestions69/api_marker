@@ -1,14 +1,14 @@
 const express = require('express')
 const app = express()
-const crypto = require("crypto");
 const PORT = process.env.PORT || 3000
 const bodyParser = require('body-parser');
 const fs = require('fs')
-const secret = 'v3ry-str0ng-k3y' 
-const IV=crypto.randomBytes(16)
+require('dotenv').config()
+const secret = process.env.SECRET
 const IP = require('ip');
 const request = require('request');
 const CryptoJS = require("crypto-js");
+
 
 const logins=['login', 'log', 'логин',  'username', 'user', 'uname', 'usr']
 
